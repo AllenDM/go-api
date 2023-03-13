@@ -1,10 +1,17 @@
 package main
 
 import (
+	"context"
 	"net/http"
+	"os"
 
+	"github.com/aws/aws-lambda-go/events"
+	"github.com/aws/aws-lambda-go/lambda"
+	ginAdapter "github.com/awslabs/aws-lambda-go-api-proxy/gin"
 	"github.com/gin-gonic/gin"
 )
+
+var ginLambda *ginAdapter.GinLambda
 
 // album represents data about a record album.
 type album struct {
@@ -27,7 +34,17 @@ func main() {
 	router.GET("/albums/:id", getAlbumByID)
 	router.DELETE("albums/delete/:id", deleteAlbumByID)
 
-	router.Run("localhost:8080")
+	environment := os.Getenv("GIN_MODE")
+	if environment == "release" {
+		ginLambda = ginAdapter.New(router)
+		lambda.Start(Handler)
+	} else {
+		router.Run("localhost:8080")
+	}
+}
+
+func Handler(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+	return ginLambda.ProxyWithContext(ctx, request)
 }
 
 // getAlbums responds with the list of all albums
